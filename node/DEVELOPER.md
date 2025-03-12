@@ -78,6 +78,29 @@ Before starting this step, make sure you've installed all software requirments.
     cd ..
     ```
 
+    <details>
+    <summary>Additional installation steps for Mac x86_64 systems</summary>
+
+    ```bash
+    cd ./npm/glide
+    export name="valkey-glide"
+    export node_os="darwin"
+    export node_arch="x64"
+    export scope="@valkey/"
+    export MUSL_FLAG="-musl"
+    export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
+    export dev_dependency_name="${scope}${pkg_name}"
+
+    # Do not commit the changed package.json file
+    mv package.json package.json.tmpl
+    envsubst < package.json.tmpl > "package.json"
+    jq --arg dev_dependency_name "$dev_dependency_name" --arg path "../.." '.devDependencies += {($dev_dependency_name): $path}' package.json > package.tmpl.json && mv package.tmpl.json package.json
+    npm i
+    cd ../..
+    ```
+
+    </details><br/>
+
 3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
 
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
