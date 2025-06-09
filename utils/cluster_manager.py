@@ -109,32 +109,39 @@ def generate_tls_certs():
     f.close()
 
     def make_key(name: str, size: int):
+        p = subprocess.Popen(
+            [
+                "openssl",
+                "genrsa",
+                "-out",
+                name,
+                str(size),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         try: 
-            p = subprocess.Popen(
-                [
-                    "openssl",
-                    "genrsa",
-                    "-out",
-                    name,
-                    str(size),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
             output, err = p.communicate(timeout=10)
-            if p.returncode != 0:
-                raise Exception(
-                    f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
-                )
-        except subprocess.TimeoutExpired as e:
+            
+        except subprocess.TimeoutExpired:
+            # Kill the process and get whatever output was generated
             p.kill()
-            stdout, stderr = p.communicate()
-            raise RuntimeError(
-                f"Timeout: OpenSSL took too long to generate key {name}\n"
-                f"Command: {' '.join(p.args)}\n"
-                f"STDOUT: {stdout}\nSTDERR: {stderr}"
-            ) from e
+            output, err = p.communicate()  # This gets partial output
+            print(f"OpenSSL command timed out!")
+            print(f"Partial STDOUT: {output}")
+            print(f"Partial STDERR: {err}")
+            raise subprocess.TimeoutExpired(
+                p.args, 10, output=output, stderr=err
+        )
+        if p.returncode != 0:
+            print(f"OpenSSL failed with return code {p.returncode}")
+            print(f"STDOUT: {output}")
+            print(f"STDERR: {err}")
+            raise RuntimeError(f"OpenSSL key generation failed")
+
+
+
             
 
     # Build CA key

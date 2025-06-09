@@ -47,10 +47,24 @@ class ValkeyCluster:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            output, err = p.communicate(timeout=80)
+            
+            try: 
+                output, err = p.communicate(timeout=80)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                output, err = p.communicate()
+                raise RuntimeError(
+                    f"Cluster script timed out after 80s.\n"
+                    f"STDOUT:\n{output}\n"
+                    f"STDERR:\n{err}"
+                )
+                
             if p.returncode != 0:
                 raise Exception(
-                    f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}"
+                    f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}\n"
+                    f"STDOUT:\n{output}\n"
+                    f"STDERR:\n{err}"
+                    
                 )
             self.parse_cluster_script_start_output(output)
 
