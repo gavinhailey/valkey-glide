@@ -109,23 +109,33 @@ def generate_tls_certs():
     f.close()
 
     def make_key(name: str, size: int):
-        p = subprocess.Popen(
-            [
-                "openssl",
-                "genrsa",
-                "-out",
-                name,
-                str(size),
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        output, err = p.communicate(timeout=10)
-        if p.returncode != 0:
-            raise Exception(
-                f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
+        try: 
+            p = subprocess.Popen(
+                [
+                    "openssl",
+                    "genrsa",
+                    "-out",
+                    name,
+                    str(size),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
             )
+            output, err = p.communicate(timeout=10)
+            if p.returncode != 0:
+                raise Exception(
+                    f"Failed to make key for {name}. Executed: {str(p.args)}:\n{err}"
+                )
+        except subprocess.TimeoutExpired as e:
+            p.kill()
+            stdout, stderr = p.communicate()
+            raise RuntimeError(
+                f"Timeout: OpenSSL took too long to generate key {name}\n"
+                f"Command: {' '.join(p.args)}\n"
+                f"STDOUT: {stdout}\nSTDERR: {stderr}"
+            ) from e
+            
 
     # Build CA key
     make_key(ca_key, 4096)
