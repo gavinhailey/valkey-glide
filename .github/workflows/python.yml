@@ -139,7 +139,7 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
+                  python3 dev.py test --args -s --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.13' }}

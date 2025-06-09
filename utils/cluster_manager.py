@@ -109,6 +109,7 @@ def generate_tls_certs():
     f.close()
 
     def make_key(name: str, size: int):
+        tic = time.perf_counter()  # Start timing
         p = subprocess.Popen(
             [
                 "openssl",
@@ -123,8 +124,12 @@ def generate_tls_certs():
         )
         try: 
             output, err = p.communicate(timeout=10)
+            toc = time.perf_counter()  # End timing on success
+            print(f"OpenSSL key generation ({size}-bit) completed in {toc - tic:.4f} seconds")
             
         except subprocess.TimeoutExpired:
+            toc = time.perf_counter()  # End timing on timeout
+            print(f"OpenSSL key generation ({size}-bit) TIMED OUT after {toc - tic:.4f} seconds")
             # Kill the process and get whatever output was generated
             p.kill()
             output, err = p.communicate()  # This gets partial output
@@ -135,6 +140,8 @@ def generate_tls_certs():
                 p.args, 10, output=output, stderr=err
         )
         if p.returncode != 0:
+            toc = time.perf_counter()  # End timing on error
+            print(f"OpenSSL key generation ({size}-bit) FAILED after {toc - tic:.4f} seconds")
             print(f"OpenSSL failed with return code {p.returncode}")
             print(f"STDOUT: {output}")
             print(f"STDERR: {err}")

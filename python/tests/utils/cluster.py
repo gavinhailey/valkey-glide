@@ -50,6 +50,7 @@ class ValkeyCluster:
             
             try: 
                 output, err = p.communicate(timeout=80)
+                print ("OUTPUT:", output)
             except subprocess.TimeoutExpired:
                 p.kill()
                 output, err = p.communicate()

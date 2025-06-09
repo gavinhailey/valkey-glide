@@ -235,63 +235,47 @@ class TestOpenTelemetryGlide:
 
         # Get initial memory usage
         process = psutil.Process()
-        
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
+
+        # Create client
         client = await create_client(
             request,
             cluster_mode=cluster_mode,
             protocol=protocol,
         )
-        async def run_commands_iteration(client):
-            # Execute multiple concurrent commands
-            commands = [
-                lambda: client.set("test_key1", "value1"),
-                lambda: client.get("test_key1"),
-                lambda: client.set("test_key2", "value2"),
-                lambda: client.get("test_key2"),
-                lambda: client.set("test_key3", "value3"),
-                lambda: client.get("test_key3"),
-            ]
 
-            async with anyio.create_task_group() as tg:
-                for command in commands:
-                    tg.start_soon(command)
+        # Execute multiple concurrent commands
+        commands = [
+            lambda: client.set("test_key1", "value1"),
+            lambda: client.get("test_key1"),
+            lambda: client.set("test_key2", "value2"),
+            lambda: client.get("test_key2"),
+            lambda: client.set("test_key3", "value3"),
+            lambda: client.get("test_key3"),
+        ]
 
-            # Force garbage collection again
-            gc.collect()
+        async with anyio.create_task_group() as tg:
+            for command in commands:
+                tg.start_soon(command)
 
-            # Wait for spans to be flushed
-            await anyio.sleep(1)
-
+        # Force garbage collection again
         gc.collect()
-        baseline_memory = process.memory_info().rss
-        measurements = []
-        for i in range(5):
-            await run_commands_iteration(client)
-            memory = process.memory_info().rss
-            measurements.append(memory)
-            
-        max_growth_percent = 3.0  # 3% per iteration
-        consecutive_violations = 0
-        max_consecutive_violations = 2
-        
-        for i in range(1, len(measurements)):
-            previous = measurements[i-1]
-            current = measurements[i]
-            
-            if previous > 0:
-                growth_percent = ((current - previous) / previous) * 100
-                
-                if growth_percent > max_growth_percent:
-                    consecutive_violations += 1
-                    if consecutive_violations > max_consecutive_violations:
-                        assert False, \
-                            f"Memory consistently growing: {consecutive_violations} consecutive " \
-                            f"violations of {max_growth_percent}% growth limit. " \
-                            f"Latest growth: {growth_percent:.2f}%"
-                else:
-                    consecutive_violations = 0  # Reset counter on non-violation
 
-        
+        # Wait for spans to be flushed
+        await anyio.sleep(1)
+
+        # Get final memory usage
+        final_memory = process.memory_info().rss
+
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
+        await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -303,78 +287,60 @@ class TestOpenTelemetryGlide:
 
         # Get initial memory usage
         process = psutil.Process()
-        
+        initial_memory = process.memory_info().rss  # Get resident set size in bytes
+
+        # Create cluster client
         client = await create_client(
             request,
             cluster_mode=cluster_mode,
             protocol=protocol,
         )
 
-        async def run_batch_iteration():
-            # Execute multiple concurrent batch operations using ClusterBatch
-            batch_operations = []
+        # Execute multiple concurrent batch operations using ClusterBatch
+        batch_operations = []
 
-            # Create first batch
-            batch1 = ClusterBatch(is_atomic=True)
-            batch1.set("{batch}key1", "value1")
-            batch1.get("{batch}key1")
-            batch1.strlen("{batch}key1")
-            batch_operations.append(lambda b=batch1: client.exec(b, raise_on_error=True))
+        # Create first batch
+        batch1 = ClusterBatch(is_atomic=True)
+        batch1.set("{batch}key1", "value1")
+        batch1.get("{batch}key1")
+        batch1.strlen("{batch}key1")
+        batch_operations.append(lambda b=batch1: client.exec(b, raise_on_error=True))
 
-            # Create second batch
-            batch2 = ClusterBatch(is_atomic=True)
-            batch2.set("{batch}key2", "value2")
-            batch2.object_refcount("{batch}key2")
-            batch_operations.append(lambda b=batch2: client.exec(b, raise_on_error=True))
+        # Create second batch
+        batch2 = ClusterBatch(is_atomic=True)
+        batch2.set("{batch}key2", "value2")
+        batch2.object_refcount("{batch}key2")
+        batch_operations.append(lambda b=batch2: client.exec(b, raise_on_error=True))
 
-            # Create third batch
-            batch3 = ClusterBatch(is_atomic=True)
-            batch3.set("{batch}key3", "value3")
-            batch3.get("{batch}key3")
-            batch3.delete(["{batch}key1", "{batch}key2", "{batch}key3"])
-            batch_operations.append(lambda b=batch3: client.exec(b, raise_on_error=True))
+        # Create third batch
+        batch3 = ClusterBatch(is_atomic=True)
+        batch3.set("{batch}key3", "value3")
+        batch3.get("{batch}key3")
+        batch3.delete(["{batch}key1", "{batch}key2", "{batch}key3"])
+        batch_operations.append(lambda b=batch3: client.exec(b, raise_on_error=True))
 
-            # Execute all batches concurrently
-            async with anyio.create_task_group() as tg:
-                for operation in batch_operations:
-                    tg.start_soon(operation)
+        # Execute all batches concurrently
+        async with anyio.create_task_group() as tg:
+            for operation in batch_operations:
+                tg.start_soon(operation)
 
-            # Force garbage collection again
-            gc.collect()
+        # Force garbage collection again
+        gc.collect()
 
-            # Wait for spans to be flushed
-            await anyio.sleep(1)
+        # Wait for spans to be flushed
+        await anyio.sleep(1)
 
+        # Get final memory usage
+        final_memory = process.memory_info().rss
 
-       # Collect measurements
-        measurements = []
-        for i in range(5):
-            await run_batch_iteration()
-            memory = process.memory_info().rss
-            measurements.append(memory)
-        
-        # Check for consecutive growth violations
-        max_growth_percent = 3.0  # 3% per iteration
-        consecutive_violations = 0
-        max_consecutive_violations = 2  # Allow 2 consecutive violations before failing
-        
-        for i in range(1, len(measurements)):
-            previous = measurements[i-1]
-            current = measurements[i]
-            
-            if previous > 0:
-                growth_percent = ((current - previous) / previous) * 100
-                
-                if growth_percent > max_growth_percent:
-                    consecutive_violations += 1
-                    if consecutive_violations > max_consecutive_violations:
-                        assert False, \
-                            f"Memory consistently growing: {consecutive_violations} consecutive " \
-                            f"violations of {max_growth_percent}% growth limit. " \
-                            f"Latest growth: {growth_percent:.2f}%"
-                else:
-                    consecutive_violations = 0  # Reset counter on non-violation
-        
+        # Calculate memory increase percentage
+        memory_increase = ((final_memory - initial_memory) / initial_memory) * 100
+
+        # Assert memory increase is not more than 10%
+        assert (
+            memory_increase < 10
+        ), f"Memory usage increased by {memory_increase: .2f}%, which is more than the allowed 10%"
+
         await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
