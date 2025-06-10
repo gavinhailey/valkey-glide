@@ -123,7 +123,7 @@ def generate_tls_certs():
             text=True,
         )
         try: 
-            output, err = p.communicate(timeout=10)
+            output, err = p.communicate(timeout=20)
             toc = time.perf_counter()  # End timing on success
             print(f"OpenSSL key generation ({size}-bit) completed in {toc - tic:.4f} seconds")
             
