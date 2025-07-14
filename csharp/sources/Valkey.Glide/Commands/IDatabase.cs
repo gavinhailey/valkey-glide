@@ -6,5 +6,12 @@ namespace Valkey.Glide.Commands;
 /// Describes functionality that is common to both standalone and cluster servers.<br />
 /// See also <see cref="GlideClient" /> and <see cref="GlideClusterClient" />.
 /// </summary>
-public interface IDatabase : IStringBaseCommands, IGenericCommands, IServerManagementCommands, IHashCommands
+public interface IDatabase :
+    IStringBaseCommands,
+    IGenericCommands,
+    IServerManagementCommands,
+    IHashCommands,
+    IConnectionManagementCommands,
+    ISetCommands,
+    IListBaseCommands
 { }

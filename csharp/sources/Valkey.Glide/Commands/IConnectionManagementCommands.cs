@@ -7,7 +7,7 @@ namespace Valkey.Glide.Commands;
 /// <br/>
 /// See more on <see href="https://valkey.io/commands/?group=string#connection">valkey.io</see>.
 /// </summary>
-internal interface IConnectionManagementCommands
+public interface IConnectionManagementCommands
 {
     /// <summary>
     /// Pings the server.
