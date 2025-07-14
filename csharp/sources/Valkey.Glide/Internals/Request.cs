@@ -35,7 +35,7 @@ internal partial class Request
     /// <param name="request">The request type</param>
     /// <param name="args">The command arguments</param>
     /// <returns>A command that converts the response to a boolean value (true if response equals 1)</returns>
-    private static Cmd<T, Boolean> Boolean<T>(RequestType request, GlideString[] args)
+    private static Cmd<T, bool> Boolean<T>(RequestType request, GlideString[] args)
         => new(request, args, false, response => Convert.ToInt64(response) == 1);
 
     /// <summary>
@@ -48,6 +48,14 @@ internal partial class Request
     private static Cmd<GlideString, ValkeyValue> ToValkeyValue(RequestType request, GlideString[] args, bool isNullable = false)
         => new(request, args, isNullable, response => (ValkeyValue)response);
 
+    /// <summary>
+    /// Create a Cmd which returns a Boolean value based on the response being OK or not.
+    /// </summary>
+    /// <param name="request">The request type</param>
+    /// <param name="args">The command arguments</param>
+    /// <returns>A command that converts the response to a boolean value (true if response equals OK)</returns>
+    private static Cmd<string, bool> OKToBool(RequestType request, GlideString[] args)
+        => new(request, args, false, response => response == "OK");
     /// <summary>
     /// Create a Cmd which converts a HashSet of objects to an array of ValkeyValues.
     /// </summary>
