@@ -5,6 +5,7 @@ using System.Net;
 using Valkey.Glide.Commands;
 using Valkey.Glide.Internals;
 
+using System.Text.Json;
 using static Valkey.Glide.Commands.Options.InfoOptions;
 using static Valkey.Glide.ConnectionConfiguration;
 
@@ -53,7 +54,13 @@ public sealed class ConnectionMultiplexer : IConnectionMultiplexer, IDisposable,
     public static async Task<ConnectionMultiplexer> ConnectAsync(ConfigurationOptions configuration, TextWriter? log = null)
     {
         Utils.Requires<NotImplementedException>(log == null, "Log writer is not supported by GLIDE");
-        StandaloneClientConfiguration standaloneConfig = CreateClientConfigBuilder<StandaloneClientConfigurationBuilder>(configuration).Build();
+
+        // StandaloneClientConfiguration standaloneConfig = CreateClientConfigBuilder<StandaloneClientConfigurationBuilder>(configuration).Build();
+
+        var standaloneConfig = new StandaloneClientConfiguration(
+            addresses: new List<(string? host, ushort? port)> { ("localhost", 6379) }
+        );
+
         GlideClient standalone = await GlideClient.CreateClient(standaloneConfig);
         string info = await standalone.Info([Section.CLUSTER]);
         BaseClientConfiguration config = info.Contains("cluster_enabled:1")

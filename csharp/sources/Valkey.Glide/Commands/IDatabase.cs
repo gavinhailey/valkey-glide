@@ -8,10 +8,12 @@ namespace Valkey.Glide.Commands;
 /// </summary>
 public interface IDatabase :
     IStringBaseCommands,
+    IGenericCommands,
     IGenericBaseCommands,
     IServerManagementCommands,
     IHashCommands,
     IConnectionManagementCommands,
     ISetCommands,
-    IListBaseCommands
+    IListBaseCommands,
+    ISortedSetCommands
 { }

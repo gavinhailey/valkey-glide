@@ -68,6 +68,9 @@ public class GlideClient : BaseClient, IDatabase
     public async Task<object?> CustomCommand(GlideString[] args)
         => await Command(Request.CustomCommand(args));
 
+    public async Task<object?> ExecuteAsync(GlideString arg)
+        => await Command(Request.CustomCommand([arg]));
+
     public async Task<string> Info() => await Info([]);
 
     public async Task<string> Info(InfoOptions.Section[] sections)

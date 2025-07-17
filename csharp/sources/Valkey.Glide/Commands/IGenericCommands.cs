@@ -32,6 +32,13 @@ public interface IGenericCommands
     Task<object?> CustomCommand(GlideString[] args);
 
     /// <summary>
+    /// Executes a single command.
+    /// </summary>
+    /// <param name="arg">A string including the command name and arguments for the command.</param>
+    /// <returns>The returning value depends on the executed command.</returns>
+    Task<object?> ExecuteAsync(GlideString arg);
+
+    /// <summary>
     /// Executes a batch by processing the queued commands.
     /// <para />
     /// See the <see href="https://valkey.io/topics/transactions/">Valkey Transactions (Atomic Batches)</see>.<br />
