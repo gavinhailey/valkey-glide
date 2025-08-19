@@ -4,7 +4,6 @@
     "rust-analyzer.procMacro.ignored": {
         "napi-derive": ["napi"]
     },
-    "editor.formatOnSave": false,
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
     "python.formatting.provider": "black",
