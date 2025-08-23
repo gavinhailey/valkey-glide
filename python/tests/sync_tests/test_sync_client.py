@@ -10594,7 +10594,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_httl_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_httl(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -10628,7 +10628,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hpttl_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hpttl(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -10662,7 +10662,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hexpiretime_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hexpiretime(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -10752,7 +10752,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hpexpiretime_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hpexpiretime(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -10842,7 +10842,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hsetex_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hsetex(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -10987,7 +10987,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hgetex_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hgetex(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -11088,7 +11088,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hexpire_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hexpire(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -11244,7 +11244,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hpexpire_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hpexpire(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
@@ -11415,7 +11415,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hexpireat_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hexpireat(self, glide_sync_client: TGlideClient):
         import time
 
         key = get_random_string(10)
@@ -11582,7 +11582,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hpexpireat_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hpexpireat(self, glide_sync_client: TGlideClient):
         import time
 
         key = get_random_string(10)
@@ -11771,7 +11771,7 @@ class TestSyncScripts:
     @pytest.mark.skip_if_version_below("9.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_hpersist_sync(self, glide_sync_client: TGlideClient):
+    def test_sync_hpersist(self, glide_sync_client: TGlideClient):
         key = get_random_string(10)
         field1 = get_random_string(5)
         field2 = get_random_string(5)
