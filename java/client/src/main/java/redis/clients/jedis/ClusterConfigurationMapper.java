@@ -102,10 +102,6 @@ public class ClusterConfigurationMapper {
      */
     public static void validateClusterConfiguration(JedisClientConfig jedisConfig) {
         // Check for unsupported cluster features
-        if (jedisConfig.getDatabase() != 0) {
-            logger.warning("Database selection is not supported in cluster mode");
-        }
-
         if (jedisConfig.getBlockingSocketTimeoutMillis() > 0) {
             logger.warning(
                     "Blocking socket timeout configuration may not be fully supported in cluster mode");
