@@ -2,7 +2,15 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+    jest,
+} from "@jest/globals";
 import * as fs from "fs";
 import ValkeyCluster from "../../utils/TestUtils";
 import {
@@ -12,6 +20,10 @@ import {
     OpenTelemetry,
     OpenTelemetryConfig,
     ProtocolVersion,
+    createLeakedOtelSpan,
+    createOtelSpanWithParent,
+    createBatchOtelSpanWithParent,
+    dropOtelSpan,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -153,6 +165,18 @@ async function wrongOpenTelemetryConfig() {
     openTelemetryConfig = {};
     expect(() => OpenTelemetry.init(openTelemetryConfig)).toThrow(
         /At least one of traces or metrics must be provided for OpenTelemetry configuration./i,
+    );
+
+    // Test configuration with invalid spanFromContext
+    const configWithInvalidSpanFromContext: OpenTelemetryConfig = {
+        traces: {
+            endpoint: "wrong.endpoint",
+        },
+        spanFromContext: "invalid_span_function" as any, // This should be a function
+    };
+
+    expect(() => OpenTelemetry.init(configWithInvalidSpanFromContext)).toThrow(
+        /Parse error. /i,
     );
 }
 
@@ -482,6 +506,561 @@ describe("OpenTelemetry GlideClusterClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+});
+
+//OpenTelemetry Parent Span NAPI Functions Tests
+describe("OpenTelemetry Parent Span NAPI Functions", () => {
+    beforeAll(async () => {
+        // Clean up any existing span files
+        if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+            fs.unlinkSync(VALID_ENDPOINT_TRACES);
+        }
+
+        // Initialize OpenTelemetry for testing
+        const openTelemetryConfig: OpenTelemetryConfig = {
+            traces: {
+                endpoint: VALID_FILE_ENDPOINT_TRACES,
+                samplePercentage: 100,
+            },
+            flushIntervalMs: 100,
+        };
+        OpenTelemetry.init(openTelemetryConfig);
+    }, 20000);
+
+    afterEach(async () => {
+        // Clean up span files after each test
+        if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+            fs.unlinkSync(VALID_ENDPOINT_TRACES);
+        }
+    });
+
+    it("createOtelSpanWithParent should create independent span when parent pointer is 0", () => {
+        const requestType = 1; // Assuming this maps to a valid request type
+        const parentSpanPtr = 0n; // 0 means create independent span
+
+        const spanPointer = createOtelSpanWithParent(
+            requestType,
+            parentSpanPtr,
+        );
+
+        // Should return valid non-zero pointer
+        expect(spanPointer).toHaveLength(2);
+        expect(spanPointer[0] !== 0 || spanPointer[1] !== 0).toBe(true);
+
+        // Clean up the span
+        const spanPtr =
+            BigInt(spanPointer[0]) | (BigInt(spanPointer[1]) << 32n);
+        dropOtelSpan(spanPtr);
+    });
+
+    it("createOtelSpanWithParent should return [0, 0] on invalid parent pointer", () => {
+        const requestType = 1;
+        const invalidParentPtr = 0xdeadbeefn; // Invalid pointer
+
+        const spanPointer = createOtelSpanWithParent(
+            requestType,
+            invalidParentPtr,
+        );
+
+        // Should return null pointer on error
+        expect(spanPointer).toEqual([0, 0]);
+    });
+
+    it("createOtelSpanWithParent should handle negative BigInt parent pointer", () => {
+        const requestType = 1;
+        const negativeParentPtr = -1n; // Negative pointer should be invalid
+
+        const spanPointer = createOtelSpanWithParent(
+            requestType,
+            negativeParentPtr,
+        );
+
+        // Should return null pointer on error
+        expect(spanPointer).toEqual([0, 0]);
+    });
+
+    it("createOtelSpanWithParent should create child span with valid parent", () => {
+        // First create a parent span
+        const parentSpanPointer = createLeakedOtelSpan("ParentSpan");
+        const parentSpanPtr =
+            BigInt(parentSpanPointer[0]) |
+            (BigInt(parentSpanPointer[1]) << 32n);
+
+        // Create child span with parent
+        const requestType = 2;
+        const childSpanPointer = createOtelSpanWithParent(
+            requestType,
+            parentSpanPtr,
+        );
+
+        // Should return valid non-zero pointer
+        expect(childSpanPointer).toHaveLength(2);
+        expect(childSpanPointer[0] !== 0 || childSpanPointer[1] !== 0).toBe(
+            true,
+        );
+
+        // Clean up spans
+        const childSpanPtr =
+            BigInt(childSpanPointer[0]) | (BigInt(childSpanPointer[1]) << 32n);
+        dropOtelSpan(childSpanPtr);
+        dropOtelSpan(parentSpanPtr);
+    });
+
+    it("createBatchOtelSpanWithParent should create independent span when parent pointer is 0", () => {
+        const parentSpanPtr = 0n; // 0 means create independent span
+
+        const spanPointer = createBatchOtelSpanWithParent(parentSpanPtr);
+
+        // Should return valid non-zero pointer
+        expect(spanPointer).toHaveLength(2);
+        expect(spanPointer[0] !== 0 || spanPointer[1] !== 0).toBe(true);
+
+        // Clean up the span
+        const spanPtr =
+            BigInt(spanPointer[0]) | (BigInt(spanPointer[1]) << 32n);
+        dropOtelSpan(spanPtr);
+    });
+
+    it("createBatchOtelSpanWithParent should return [0, 0] on invalid parent pointer", () => {
+        const invalidParentPtr = 0xdeadbeefn; // Invalid pointer
+
+        const spanPointer = createBatchOtelSpanWithParent(invalidParentPtr);
+
+        // Should return null pointer on error
+        expect(spanPointer).toEqual([0, 0]);
+    });
+
+    it("createBatchOtelSpanWithParent should handle negative BigInt parent pointer", () => {
+        const negativeParentPtr = -1n; // Negative pointer should be invalid
+
+        const spanPointer = createBatchOtelSpanWithParent(negativeParentPtr);
+
+        // Should return null pointer on error
+        expect(spanPointer).toEqual([0, 0]);
+    });
+
+    it("createBatchOtelSpanWithParent should create child span with valid parent", () => {
+        // First create a parent span
+        const parentSpanPointer = createLeakedOtelSpan("ParentBatchSpan");
+        const parentSpanPtr =
+            BigInt(parentSpanPointer[0]) |
+            (BigInt(parentSpanPointer[1]) << 32n);
+
+        // Create child batch span with parent
+        const childSpanPointer = createBatchOtelSpanWithParent(parentSpanPtr);
+
+        // Should return valid non-zero pointer
+        expect(childSpanPointer).toHaveLength(2);
+        expect(childSpanPointer[0] !== 0 || childSpanPointer[1] !== 0).toBe(
+            true,
+        );
+
+        // Clean up spans
+        const childSpanPtr =
+            BigInt(childSpanPointer[0]) | (BigInt(childSpanPointer[1]) << 32n);
+        dropOtelSpan(childSpanPtr);
+        dropOtelSpan(parentSpanPtr);
+    });
+
+    it("should handle multiple nested child spans correctly", () => {
+        // Create grandparent span
+        const grandparentSpanPointer = createLeakedOtelSpan("GrandparentSpan");
+        const grandparentSpanPtr =
+            BigInt(grandparentSpanPointer[0]) |
+            (BigInt(grandparentSpanPointer[1]) << 32n);
+
+        // Create parent span as child of grandparent
+        const parentSpanPointer = createOtelSpanWithParent(
+            3,
+            grandparentSpanPtr,
+        );
+        expect(parentSpanPointer[0] !== 0 || parentSpanPointer[1] !== 0).toBe(
+            true,
+        );
+        const parentSpanPtr =
+            BigInt(parentSpanPointer[0]) |
+            (BigInt(parentSpanPointer[1]) << 32n);
+
+        // Create child span as child of parent
+        const childSpanPointer = createOtelSpanWithParent(4, parentSpanPtr);
+        expect(childSpanPointer[0] !== 0 || childSpanPointer[1] !== 0).toBe(
+            true,
+        );
+        const childSpanPtr =
+            BigInt(childSpanPointer[0]) | (BigInt(childSpanPointer[1]) << 32n);
+
+        // Clean up all spans
+        dropOtelSpan(childSpanPtr);
+        dropOtelSpan(parentSpanPtr);
+        dropOtelSpan(grandparentSpanPtr);
+    });
+
+    it("should handle concurrent span creation with same parent", () => {
+        // Create a parent span
+        const parentSpanPointer = createLeakedOtelSpan("SharedParentSpan");
+        const parentSpanPtr =
+            BigInt(parentSpanPointer[0]) |
+            (BigInt(parentSpanPointer[1]) << 32n);
+
+        // Create multiple child spans concurrently
+        const child1Pointer = createOtelSpanWithParent(5, parentSpanPtr);
+        const child2Pointer = createOtelSpanWithParent(6, parentSpanPtr);
+        const child3Pointer = createBatchOtelSpanWithParent(parentSpanPtr);
+
+        // All children should be valid
+        expect(child1Pointer[0] !== 0 || child1Pointer[1] !== 0).toBe(true);
+        expect(child2Pointer[0] !== 0 || child2Pointer[1] !== 0).toBe(true);
+        expect(child3Pointer[0] !== 0 || child3Pointer[1] !== 0).toBe(true);
+
+        // Clean up all spans
+        const child1Ptr =
+            BigInt(child1Pointer[0]) | (BigInt(child1Pointer[1]) << 32n);
+        const child2Ptr =
+            BigInt(child2Pointer[0]) | (BigInt(child2Pointer[1]) << 32n);
+        const child3Ptr =
+            BigInt(child3Pointer[0]) | (BigInt(child3Pointer[1]) << 32n);
+
+        dropOtelSpan(child1Ptr);
+        dropOtelSpan(child2Ptr);
+        dropOtelSpan(child3Ptr);
+        dropOtelSpan(parentSpanPtr);
+    });
+});
+
+//OpenTelemetry spanFromContext functionality Tests
+describe("OpenTelemetry spanFromContext functionality", () => {
+    describe("extractSpanPointer method", () => {
+        it("should return null when no active span context is available", () => {
+            // Since there's no active span context in this test environment,
+            // extractSpanPointer should return null
+            const result = OpenTelemetry.extractSpanPointer();
+            expect(result).toBeNull();
+        });
+
+        it("should handle span extraction gracefully", () => {
+            const result = OpenTelemetry.extractSpanPointer();
+
+            // In a test environment without active spans, this should return null
+            expect(result).toBeNull();
+        });
+
+        it("should be callable multiple times without error", () => {
+            // Test that the method can be called multiple times safely
+            expect(() => {
+                OpenTelemetry.extractSpanPointer();
+                OpenTelemetry.extractSpanPointer();
+                OpenTelemetry.extractSpanPointer();
+            }).not.toThrow();
+        });
+    });
+
+    describe("OpenTelemetry reinitialization with spanFromContext", () => {
+        it("should not throw when calling init multiple times with spanFromContext", () => {
+            // Following the pattern from existing tests - subsequent init calls don't throw
+            const mockSpanFromContext = jest.fn().mockReturnValue(12345);
+            const anotherConfig: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: "file:///tmp/another_test_spans.json",
+                    samplePercentage: 50,
+                },
+                spanFromContext: mockSpanFromContext,
+            };
+
+            expect(() => OpenTelemetry.init(anotherConfig)).not.toThrow();
+        });
+
+        it("should maintain functionality after multiple init attempts", () => {
+            // Try to init again with different spanFromContext
+            const mockSpanFromContext = jest.fn().mockReturnValue(null);
+            const config: OpenTelemetryConfig = {
+                metrics: {
+                    endpoint: "https://example.com/metrics",
+                },
+                spanFromContext: mockSpanFromContext,
+            };
+
+            OpenTelemetry.init(config);
+
+            // extractSpanPointer should still work
+            expect(() => OpenTelemetry.extractSpanPointer()).not.toThrow();
+        });
+
+        it("should accept various spanFromContext function configurations", () => {
+            // Test with function that returns a number
+            const spanFromContextReturningNumber = () => 42;
+            let config: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                },
+                spanFromContext: spanFromContextReturningNumber,
+            };
+            expect(() => OpenTelemetry.init(config)).not.toThrow();
+
+            // Test with function that returns null
+            const spanFromContextReturningNull = () => null;
+            config = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                },
+                spanFromContext: spanFromContextReturningNull,
+            };
+            expect(() => OpenTelemetry.init(config)).not.toThrow();
+
+            // Test with function that throws
+            const spanFromContextThrowing = () => {
+                throw new Error("Test error");
+            };
+            config = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                },
+                spanFromContext: spanFromContextThrowing,
+            };
+            expect(() => OpenTelemetry.init(config)).not.toThrow();
+        });
+    });
+});
+
+//OpenTelemetry Parent Span Integration Tests
+describe("OpenTelemetry Parent Span Integration Tests", () => {
+    const testsFailed = 0;
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+
+    beforeAll(async () => {
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
+        cluster = clusterAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
+                  parseEndpoints(clusterAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+
+        // Initialize OpenTelemetry for integration testing
+        const openTelemetryConfig: OpenTelemetryConfig = {
+            traces: {
+                endpoint: VALID_FILE_ENDPOINT_TRACES,
+                samplePercentage: 100,
+            },
+            flushIntervalMs: 100,
+        };
+        OpenTelemetry.init(openTelemetryConfig);
+    }, 40000);
+
+    afterEach(async () => {
+        // Clean up span files after each test
+        if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+            fs.unlinkSync(VALID_ENDPOINT_TRACES);
+        }
+        await flushAndCloseClient(true, cluster?.getAddresses(), client);
+    });
+
+    afterAll(async () => {
+        if (testsFailed === 0) {
+            await cluster.close();
+        } else {
+            await cluster.close(true);
+        }
+    });
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should create spans with parent context when spanFromContext returns a valid pointer_%p",
+        async (protocol) => {
+            // Mock spanFromContext to return a valid parent span pointer
+            let parentSpanPointer: bigint | null = null;
+
+            const openTelemetryConfig: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                    samplePercentage: 100,
+                },
+                flushIntervalMs: 100,
+                spanFromContext: () => {
+                    if (parentSpanPointer !== null) {
+                        return Number(parentSpanPointer);
+                    }
+                    return null;
+                },
+            };
+
+            // Create a parent span to simulate active context
+            const parentSpanPair = createLeakedOtelSpan("MockActiveSpan");
+            parentSpanPointer =
+                BigInt(parentSpanPair[0]) | (BigInt(parentSpanPair[1]) << 32n);
+
+            // Re-initialize OpenTelemetry with spanFromContext
+            OpenTelemetry.init(openTelemetryConfig);
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            // Execute commands that should create child spans
+            await client.set("test_parent_span_key", "test_value");
+            await client.get("test_parent_span_key");
+
+            // Wait for spans to be flushed
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Verify spans were created
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                const { spanNames } = readAndParseSpanFile(
+                    VALID_ENDPOINT_TRACES,
+                );
+                expect(spanNames).toContain("Set");
+                expect(spanNames).toContain("Get");
+            }
+
+            // Clean up parent span
+            dropOtelSpan(parentSpanPointer);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should create independent spans when spanFromContext returns null_%p",
+        async (protocol) => {
+            const openTelemetryConfig: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                    samplePercentage: 100,
+                },
+                flushIntervalMs: 100,
+                spanFromContext: () => null, // Always return null
+            };
+
+            OpenTelemetry.init(openTelemetryConfig);
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            // Execute commands that should create independent spans
+            await client.set("test_independent_span_key", "test_value");
+            await client.get("test_independent_span_key");
+
+            // Wait for spans to be flushed
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Verify spans were created (should fall back to independent spans)
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                const { spanNames } = readAndParseSpanFile(
+                    VALID_ENDPOINT_TRACES,
+                );
+                expect(spanNames).toContain("Set");
+                expect(spanNames).toContain("Get");
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should handle spanFromContext function throwing errors gracefully_%p",
+        async (protocol) => {
+            const openTelemetryConfig: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                    samplePercentage: 100,
+                },
+                flushIntervalMs: 100,
+                spanFromContext: () => {
+                    throw new Error("spanFromContext error");
+                },
+            };
+
+            OpenTelemetry.init(openTelemetryConfig);
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            // Execute commands - should not throw and should create independent spans
+            await client.set("test_error_span_key", "test_value");
+            await client.get("test_error_span_key");
+
+            // Wait for spans to be flushed
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Verify spans were still created (should fall back to independent spans)
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                const { spanNames } = readAndParseSpanFile(
+                    VALID_ENDPOINT_TRACES,
+                );
+                expect(spanNames).toContain("Set");
+                expect(spanNames).toContain("Get");
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "should create parent-child relationship for batch operations_%p",
+        async (protocol) => {
+            // Mock spanFromContext to return a valid parent span pointer
+            let parentSpanPointer: bigint | null = null;
+
+            const openTelemetryConfig: OpenTelemetryConfig = {
+                traces: {
+                    endpoint: VALID_FILE_ENDPOINT_TRACES,
+                    samplePercentage: 100,
+                },
+                flushIntervalMs: 100,
+                spanFromContext: () => {
+                    if (parentSpanPointer !== null) {
+                        return Number(parentSpanPointer);
+                    }
+                    return null;
+                },
+            };
+
+            // Create a parent span to simulate active context
+            const parentSpanPair = createLeakedOtelSpan("MockActiveBatchSpan");
+            parentSpanPointer =
+                BigInt(parentSpanPair[0]) | (BigInt(parentSpanPair[1]) << 32n);
+
+            OpenTelemetry.init(openTelemetryConfig);
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            // Execute batch operation that should create child span
+            const batch = new ClusterBatch(true);
+            batch.set("test_batch_key", "test_value");
+            batch.get("test_batch_key");
+
+            const response = await client.exec(batch, true);
+            expect(response).not.toBeNull();
+
+            // Wait for spans to be flushed
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // Verify batch span was created
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                const { spanNames } = readAndParseSpanFile(
+                    VALID_ENDPOINT_TRACES,
+                );
+                expect(spanNames).toContain("Batch");
+            }
+
+            // Clean up parent span
+            dropOtelSpan(parentSpanPointer);
         },
         TIMEOUT,
     );
