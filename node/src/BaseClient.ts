@@ -145,7 +145,6 @@ import {
     createLSet,
     createLTrim,
     createLeakedOtelSpan,
-    createNamedOtelSpan,
     createOtelSpanWithParent,
     createBatchOtelSpanWithParent,
     createMGet,

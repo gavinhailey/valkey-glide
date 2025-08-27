@@ -556,7 +556,7 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
 }
 
 /// Creates an open telemetry span with the given name and returns a pointer to the span
-#[napi]
+#[napi(ts_return_type = "[number, number]")]
 pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
     let span = GlideOpenTelemetry::new_span(&name);
     let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
@@ -572,7 +572,7 @@ pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
 ///
 /// # Returns
 /// A pair of u32 values representing the span pointer, or [0, 0] on failure
-#[napi]
+#[napi(ts_return_type = "[number, number]")]
 pub fn create_otel_span_with_parent(request_type: u32, parent_span_ptr: BigInt) -> [u32; 2] {
     let (is_negative, parent_ptr_u64, lossless) = parent_span_ptr.get_u64();
 
@@ -628,7 +628,7 @@ pub fn create_otel_span_with_parent(request_type: u32, parent_span_ptr: BigInt) 
 ///
 /// # Returns
 /// A pair of u32 values representing the span pointer, or [0, 0] on failure
-#[napi]
+#[napi(ts_return_type = "[number, number]")]
 pub fn create_batch_otel_span_with_parent(parent_span_ptr: BigInt) -> [u32; 2] {
     let (is_negative, parent_ptr_u64, lossless) = parent_span_ptr.get_u64();
 
@@ -671,21 +671,6 @@ pub fn create_batch_otel_span_with_parent(parent_span_ptr: BigInt) -> [u32; 2] {
             [0, 0]
         }
     }
-}
-
-/// Creates an OpenTelemetry span with a custom name and returns a pointer to the span.
-/// This is useful for creating parent spans that can be used with createOtelSpanWithParent.
-///
-/// # Parameters
-/// * `name` - The name for the span
-///
-/// # Returns
-/// A pair of u32 values representing the span pointer, or [0, 0] on failure
-#[napi]
-pub fn create_named_otel_span(name: String) -> [u32; 2] {
-    let span = GlideOpenTelemetry::new_span(&name);
-    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
-    split_pointer(s)
 }
 
 #[napi]
