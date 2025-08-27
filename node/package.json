@@ -86,6 +86,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29",
+        "@opentelemetry/api": "^1.9.0",
         "@types/jest": "29",
         "@types/minimist": "1",
         "@types/semver": "7",

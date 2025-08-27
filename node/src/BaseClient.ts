@@ -1232,14 +1232,14 @@ export class BaseClient {
             // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
 
-            if (OpenTelemetry.instance) {
+            if (OpenTelemetry.isInitialized()) {
                 const commandName =
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]
                         : "Batch";
 
                 // Try to get parent span pointer from spanFromContext callback if configured
-                const parentSpanPtr = OpenTelemetry.extractSpanPointer();
+                const parentSpanPtr = this.extractSpanPointer();
 
                 let pair: number[];
                 if (parentSpanPtr !== null && parentSpanPtr !== 0n) {
@@ -1457,6 +1457,25 @@ export class BaseClient {
         }
 
         return result;
+    }
+
+    /**
+     * Extract span pointer from the current execution context using the configured spanFromContext callback.
+     * This method safely calls the user-provided spanFromContext function and handles any errors gracefully.
+     *
+     * @returns BigInt span pointer if a parent span is available, null otherwise
+     */
+    private extractSpanPointer(): bigint | null {
+        try {
+            return OpenTelemetry.extractSpanPointer();
+        } catch (error) {
+            Logger.log(
+                "warn",
+                "GlideBaseClient",
+                `spanFromContext function threw an error: ${error}. Falling back to independent span creation.`,
+            );
+            return null;
+        }
     }
 
     cancelPubSubFuturesWithExceptionSafe(exception: ConnectionError): void {

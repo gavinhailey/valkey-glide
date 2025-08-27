@@ -79,82 +79,91 @@ export class OpenTelemetry {
      * OpenTelemetry.init(openTelemetryConfig);
      * ```
      *
+     * @remarks
+     *   OpenTelemetry can only be initialized once per process. Subsequent calls to
+     *   init() will be ignored. This is by design, as OpenTelemetry is a global
+     *   resource that should be configured once at application startup.
+     *
      * @param openTelemetryConfig - Configuration object for telemetry collection and exporting.
      */
-    public static init(openTelemetryConfig: OpenTelemetryConfig): void {
-        if (this._instance) {
+    public static init(openTelemetryConfig: OpenTelemetryConfig) {
+        if (!this._instance) {
+            this.internalInit(openTelemetryConfig);
             Logger.log(
-                "warn",
+                "info",
                 "GlideOpenTelemetry",
-                "OpenTelemetry already initialized - ignoring new configuration",
+                "OpenTelemetry initialized with config: " +
+                JSON.stringify(openTelemetryConfig),
             );
             return;
         }
 
-        if (!openTelemetryConfig || typeof openTelemetryConfig !== "object") {
-            throw new ConfigurationError(
-                "OpenTelemetry configuration is required.",
-            );
-        }
-
-        this.internalInit(openTelemetryConfig);
         Logger.log(
-            "info",
+            "warn",
             "GlideOpenTelemetry",
-            "OpenTelemetry initialized with config: " +
-                JSON.stringify({
-                    ...openTelemetryConfig,
-                    // Don't log the spanFromContext function
-                    spanFromContext: openTelemetryConfig.spanFromContext
-                        ? "[Function]"
-                        : undefined,
-                }),
+            "OpenTelemetry already initialized - ignoring new configuration",
         );
     }
 
     private static internalInit(openTelemetryConfig: OpenTelemetryConfig) {
         this.openTelemetryConfig = openTelemetryConfig;
-        // Extract the native config without the spanFromContext callback
-        const { spanFromContext, ...nativeConfig } = openTelemetryConfig;
-        InitOpenTelemetry(nativeConfig);
+        InitOpenTelemetry(openTelemetryConfig);
         this._instance = new OpenTelemetry();
     }
 
     /**
-     * Gets the current OpenTelemetry instance.
-     * @returns The OpenTelemetry instance if initialized, null otherwise.
+     * Check if the OpenTelemetry instance is initialized
+     * @returns True if the OpenTelemetry instance is initialized, false otherwise
      */
-    public static get instance(): OpenTelemetry | null {
-        return this._instance;
+    public static isInitialized() {
+        return this._instance != null;
     }
 
     /**
-     * Sets the percentage of requests to be sampled and traced. Must be a value between 0 and 100.
-     * This setting only affects traces, not metrics.
-     *
-     * @param samplePercentage - The percentage of requests to sample (0-100).
-     * @throws ConfigurationError If the percentage is invalid or OpenTelemetry is not initialized.
+     * Get the sample percentage for traces
+     * @returns The sample percentage for traces only if OpenTelemetry is initialized and the traces config is set, otherwise undefined.
      */
-    public static setSamplePercentage(samplePercentage: number): void {
-        if (!this._instance) {
-            throw new ConfigurationError("OpenTelemetry is not initialized.");
-        }
+    public static getSamplePercentage() {
+        return this.openTelemetryConfig?.traces?.samplePercentage;
+    }
 
-        if (
-            typeof samplePercentage !== "number" ||
-            samplePercentage < 0 ||
-            samplePercentage > 100
-        ) {
+    /**
+     * Determines if the current request should be sampled for OpenTelemetry tracing.
+     * Uses the configured sample percentage to randomly decide whether to create a span for this request.
+     * @returns true if the request should be sampled, false otherwise
+     */
+    public static shouldSample(): boolean {
+        const percentage = this.getSamplePercentage();
+        return (
+            this.isInitialized() &&
+            percentage !== undefined &&
+            Math.random() * 100 < percentage
+        );
+    }
+
+
+    /**
+     * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100.
+     * This setting only affects traces, not metrics.
+     * @param percentage - The sample percentage 0-100
+     * @throws Error if OpenTelemetry is not initialized or traces config is not set
+     * @remarks
+     * This method can be called at runtime to change the sampling percentage without reinitializing OpenTelemetry.
+     */
+    public static setSamplePercentage(percentage: number) {
+        if (!this.openTelemetryConfig || !this.openTelemetryConfig.traces) {
             throw new ConfigurationError(
-                "Sample percentage must be a number between 0 and 100.",
+                "OpenTelemetry config traces not initialized",
             );
         }
 
-        Logger.log(
-            "info",
-            "GlideOpenTelemetry",
-            `Setting sample percentage to: ${samplePercentage}`,
-        );
+        if (percentage < 0 || percentage > 100) {
+            throw new ConfigurationError(
+                "Sample percentage must be between 0 and 100",
+            );
+        }
+
+        this.openTelemetryConfig.traces.samplePercentage = percentage;
     }
 
     /**
@@ -181,20 +190,5 @@ export class OpenTelemetry {
             );
             return null;
         }
-    }
-
-    /**
-     * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100.
-     * This setting only affects traces, not metrics.
-     *
-     * @param samplePercentage - The percentage of requests to sample (0-100).
-     * @throws ConfigurationError If the percentage is invalid or OpenTelemetry is not initialized.
-     */
-    public setSamplePercentage(samplePercentage: number): void {
-        OpenTelemetry.setSamplePercentage(samplePercentage);
-    }
-
-    private constructor() {
-        // Private constructor to prevent direct instantiation
     }
 }
