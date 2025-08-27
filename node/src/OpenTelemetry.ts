@@ -84,7 +84,8 @@ export class OpenTelemetry {
      *   init() will be ignored. This is by design, as OpenTelemetry is a global
      *   resource that should be configured once at application startup.
      *
-     * @param openTelemetryConfig - Configuration object for telemetry collection and exporting.
+     * Initialize the OpenTelemetry instance
+     * @param openTelemetryConfig - The OpenTelemetry configuration
      */
     public static init(openTelemetryConfig: OpenTelemetryConfig) {
         if (!this._instance) {
