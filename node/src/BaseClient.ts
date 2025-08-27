@@ -145,6 +145,9 @@ import {
     createLSet,
     createLTrim,
     createLeakedOtelSpan,
+    createNamedOtelSpan,
+    createOtelSpanWithParent,
+    createBatchOtelSpanWithParent,
     createMGet,
     createMSet,
     createMSetNX,
@@ -1229,12 +1232,31 @@ export class BaseClient {
             // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
             let spanPtr: Long | null = null;
 
-            if (OpenTelemetry.shouldSample()) {
+            if (OpenTelemetry.instance) {
                 const commandName =
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]
                         : "Batch";
-                const pair = createLeakedOtelSpan(commandName);
+
+                // Try to get parent span pointer from spanFromContext callback if configured
+                const parentSpanPtr = OpenTelemetry.extractSpanPointer();
+
+                let pair: number[];
+                if (parentSpanPtr !== null && parentSpanPtr !== 0n) {
+                    // Create child span with parent context
+                    if (command instanceof command_request.Command) {
+                        pair = createOtelSpanWithParent(
+                            command.requestType,
+                            parentSpanPtr,
+                        );
+                    } else {
+                        pair = createBatchOtelSpanWithParent(parentSpanPtr);
+                    }
+                } else {
+                    // Fallback to creating independent span
+                    pair = createLeakedOtelSpan(commandName);
+                }
+
                 spanPtr = new Long(pair[0], pair[1]);
             }
 

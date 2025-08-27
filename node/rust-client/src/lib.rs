@@ -23,7 +23,7 @@ use glide_core::start_socket_listener;
 use napi::bindgen_prelude::BigInt;
 use napi::bindgen_prelude::Either;
 use napi::bindgen_prelude::Uint8Array;
-use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
+use napi::{Env, Error, JsFunction, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
 use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
@@ -70,10 +70,10 @@ struct AsyncClient {
 /// - `traces`: Optional configuration for exporting trace data. If `None`, trace data will not be exported.
 /// - `metrics`: Optional configuration for exporting metrics data. If `None`, metrics data will not be exported.
 /// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
+/// - `span_from_context`: Optional configuration for creating spans with parent context from active spans. If enabled, operations will attempt to use existing OpenTelemetry context.
 ///
 /// At least one of traces or metrics must be provided.
 #[napi(object)]
-#[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
     pub traces: Option<OpenTelemetryTracesConfig>,
@@ -81,6 +81,10 @@ pub struct OpenTelemetryConfig {
     pub metrics: Option<OpenTelemetryMetricsConfig>,
     /// Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, the default `DEFAULT_FLUSH_SIGNAL_INTERVAL_MS` will be used.
     pub flush_interval_ms: Option<i64>,
+    /// Optional function for extracting span context from the current execution context.
+    /// If provided, Valkey operations will attempt to use the extracted span as parent for tracing.
+    /// If not provided or returns None, operations will create independent spans.
+    pub span_from_context: Option<JsFunction>,
 }
 
 /// Configuration for exporting OpenTelemetry traces.
@@ -115,6 +119,8 @@ pub struct OpenTelemetryMetricsConfig {
     /// The endpoint to which metrics data will be exported.
     pub endpoint: String,
 }
+
+
 
 fn to_js_error(err: impl std::error::Error) -> Error {
     napi::Error::new(Status::Unknown, err.to_string())
@@ -550,8 +556,133 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
 }
 
 /// Creates an open telemetry span with the given name and returns a pointer to the span
-#[napi(ts_return_type = "[number, number]")]
+#[napi]
 pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
+    let span = GlideOpenTelemetry::new_span(&name);
+    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
+    split_pointer(s)
+}
+
+/// Creates an OpenTelemetry span with the given request type and parent span pointer.
+/// Returns a pointer to the created span as a pair of u32 values [low_bits, high_bits].
+///
+/// # Parameters
+/// * `request_type` - The type of request for the span name
+/// * `parent_span_ptr` - BigInt pointer to the parent span (0 to create independent span)
+///
+/// # Returns
+/// A pair of u32 values representing the span pointer, or [0, 0] on failure
+#[napi]
+pub fn create_otel_span_with_parent(request_type: u32, parent_span_ptr: BigInt) -> [u32; 2] {
+    let (is_negative, parent_ptr_u64, lossless) = parent_span_ptr.get_u64();
+
+    if is_negative || !lossless {
+        return [0, 0]; // Return null pointer on error
+    }
+
+    // Convert request type number to string
+    let span_name = format!("RequestType_{}", request_type);
+
+    // If parent_ptr_u64 is 0, create independent span
+    if parent_ptr_u64 == 0 {
+        let span = GlideOpenTelemetry::new_span(&span_name);
+        let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
+        return split_pointer(s);
+    }
+
+    // Validate the parent pointer more thoroughly before using it
+    let parent_ptr = parent_ptr_u64 as *mut GlideSpan;
+    if parent_ptr.is_null() {
+        return [0, 0];
+    }
+
+    // Use std::ptr::NonNull for safer pointer handling
+    let non_null_ptr = match std::ptr::NonNull::new(parent_ptr) {
+        Some(ptr) => ptr,
+        None => return [0, 0],
+    };
+
+    // Reconstruct Arc from raw pointer with better error handling
+    let parent_span = unsafe { Arc::from_raw(non_null_ptr.as_ptr()) };
+
+    match parent_span.add_span(&span_name) {
+        Ok(child_span) => {
+            // Keep the parent span alive - convert back to raw pointer
+            let _ = Arc::into_raw(parent_span);
+            let s = Arc::into_raw(Arc::new(child_span)) as *mut GlideSpan;
+            split_pointer(s)
+        }
+        Err(_) => {
+            // Ensure parent span is properly released on error
+            let _ = Arc::into_raw(parent_span);
+            [0, 0]
+        }
+    }
+}
+
+/// Creates an OpenTelemetry batch span with the given parent span pointer.
+/// Returns a pointer to the created span as a pair of u32 values [low_bits, high_bits].
+///
+/// # Parameters
+/// * `parent_span_ptr` - BigInt pointer to the parent span (0 to create independent span)
+///
+/// # Returns
+/// A pair of u32 values representing the span pointer, or [0, 0] on failure
+#[napi]
+pub fn create_batch_otel_span_with_parent(parent_span_ptr: BigInt) -> [u32; 2] {
+    let (is_negative, parent_ptr_u64, lossless) = parent_span_ptr.get_u64();
+
+    if is_negative || !lossless {
+        return [0, 0]; // Return null pointer on error
+    }
+
+    // If parent_ptr_u64 is 0, create independent span
+    if parent_ptr_u64 == 0 {
+        let span = GlideOpenTelemetry::new_span("Batch");
+        let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
+        return split_pointer(s);
+    }
+
+    // Validate the parent pointer more thoroughly before using it
+    let parent_ptr = parent_ptr_u64 as *mut GlideSpan;
+    if parent_ptr.is_null() {
+        return [0, 0];
+    }
+
+    // Use std::ptr::NonNull for safer pointer handling
+    let non_null_ptr = match std::ptr::NonNull::new(parent_ptr) {
+        Some(ptr) => ptr,
+        None => return [0, 0],
+    };
+
+    // Reconstruct Arc from raw pointer with better error handling
+    let parent_span = unsafe { Arc::from_raw(non_null_ptr.as_ptr()) };
+
+    match parent_span.add_span("Batch") {
+        Ok(child_span) => {
+            // Keep the parent span alive - convert back to raw pointer
+            let _ = Arc::into_raw(parent_span);
+            let s = Arc::into_raw(Arc::new(child_span)) as *mut GlideSpan;
+            split_pointer(s)
+        }
+        Err(_) => {
+            // Ensure parent span is properly released on error
+            let _ = Arc::into_raw(parent_span);
+            [0, 0]
+        }
+    }
+}
+
+/// Creates an OpenTelemetry span with a custom name and returns a pointer to the span.
+/// This is useful for creating parent spans that can be used with createOtelSpanWithParent.
+///
+/// # Parameters
+/// * `name` - The name for the span
+///
+/// # Returns
+/// A pair of u32 values representing the span pointer, or [0, 0] on failure
+#[napi]
+pub fn create_named_otel_span(name: String) -> [u32; 2] {
     let span = GlideOpenTelemetry::new_span(&name);
     let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
     split_pointer(s)
@@ -612,7 +743,7 @@ impl Script {
         glide_core::scripts_container::remove_script(&self.hash);
     }
 
-    /// Decrements the script's reference count in the local container.  
+    /// Decrements the script's reference count in the local container.
     /// Removes the script when the count reaches zero.
     ///
     /// You need to call this method when you're done with the Script object. Script objects are NOT
