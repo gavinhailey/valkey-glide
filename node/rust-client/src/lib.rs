@@ -84,6 +84,7 @@ pub struct OpenTelemetryConfig {
     /// Optional function for extracting span context from the current execution context.
     /// If provided, Valkey operations will attempt to use the extracted span as parent for tracing.
     /// If not provided or returns None, operations will create independent spans.
+    #[napi(ts_type = "() => (bigint | null)")]
     pub span_from_context: Option<JsFunction>,
 }
 

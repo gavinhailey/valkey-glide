@@ -179,10 +179,7 @@ export class OpenTelemetry {
         }
 
         try {
-            const spanPtr = this.openTelemetryConfig.spanFromContext();
-            return spanPtr !== null && spanPtr !== undefined
-                ? BigInt(spanPtr)
-                : null;
+            return this.openTelemetryConfig.spanFromContext();
         } catch (error) {
             Logger.log(
                 "warn",
