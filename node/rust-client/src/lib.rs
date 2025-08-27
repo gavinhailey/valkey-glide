@@ -121,8 +121,6 @@ pub struct OpenTelemetryMetricsConfig {
     pub endpoint: String,
 }
 
-
-
 fn to_js_error(err: impl std::error::Error) -> Error {
     napi::Error::new(Status::Unknown, err.to_string())
 }
