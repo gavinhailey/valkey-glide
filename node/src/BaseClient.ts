@@ -1238,7 +1238,7 @@ export class BaseClient {
                         : "Batch";
 
                 // Try to get parent span pointer from spanFromContext callback if configured
-                const parentSpanPtr = this.extractSpanPointer();
+                const parentSpanPtr = OpenTelemetry.extractSpanPointer();
 
                 let pair: number[];
                 if (parentSpanPtr !== null && parentSpanPtr !== 0n) {
@@ -1456,25 +1456,6 @@ export class BaseClient {
         }
 
         return result;
-    }
-
-    /**
-     * Extract span pointer from the current execution context using the configured spanFromContext callback.
-     * This method safely calls the user-provided spanFromContext function and handles any errors gracefully.
-     *
-     * @returns BigInt span pointer if a parent span is available, null otherwise
-     */
-    private extractSpanPointer(): bigint | null {
-        try {
-            return OpenTelemetry.extractSpanPointer();
-        } catch (error) {
-            Logger.log(
-                "warn",
-                "GlideBaseClient",
-                `spanFromContext function threw an error: ${error}. Falling back to independent span creation.`,
-            );
-            return null;
-        }
     }
 
     cancelPubSubFuturesWithExceptionSafe(exception: ConnectionError): void {

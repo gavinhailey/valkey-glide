@@ -766,7 +766,7 @@ describe("OpenTelemetry spanFromContext functionality", () => {
                     endpoint: "file:///tmp/another_test_spans.json",
                     samplePercentage: 50,
                 },
-                spanFromContext: mockSpanFromContext,
+                spanFromContext: mockSpanFromContext as () => bigint | null,
             };
 
             expect(() => OpenTelemetry.init(anotherConfig)).not.toThrow();
@@ -779,7 +779,7 @@ describe("OpenTelemetry spanFromContext functionality", () => {
                 metrics: {
                     endpoint: "https://example.com/metrics",
                 },
-                spanFromContext: mockSpanFromContext,
+                spanFromContext: mockSpanFromContext as () => bigint | null,
             };
 
             OpenTelemetry.init(config);
@@ -790,12 +790,12 @@ describe("OpenTelemetry spanFromContext functionality", () => {
 
         it("should accept various spanFromContext function configurations", () => {
             // Test with function that returns a number
-            const spanFromContextReturningNumber = () => 42;
+            const spanFromContextReturningNumber = () => BigInt(42);
             let config: OpenTelemetryConfig = {
                 traces: {
                     endpoint: VALID_FILE_ENDPOINT_TRACES,
                 },
-                spanFromContext: spanFromContextReturningNumber,
+                spanFromContext: spanFromContextReturningNumber as () => bigint | null,
             };
             expect(() => OpenTelemetry.init(config)).not.toThrow();
 
@@ -881,7 +881,7 @@ describe("OpenTelemetry Parent Span Integration Tests", () => {
                 flushIntervalMs: 100,
                 spanFromContext: () => {
                     if (parentSpanPointer !== null) {
-                        return Number(parentSpanPointer);
+                        return BigInt(parentSpanPointer);
                     }
                     return null;
                 },
@@ -1020,7 +1020,7 @@ describe("OpenTelemetry Parent Span Integration Tests", () => {
                 flushIntervalMs: 100,
                 spanFromContext: () => {
                     if (parentSpanPointer !== null) {
-                        return Number(parentSpanPointer);
+                        return BigInt(parentSpanPointer);
                     }
                     return null;
                 },

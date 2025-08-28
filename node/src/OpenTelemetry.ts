@@ -53,30 +53,26 @@ export class OpenTelemetry {
      *
      * Example usage:
      * ```typescript
-     * import { OpenTelemetry, OpenTelemetryConfig } from "@valkey/valkey-glide";
-     * import { trace, context } from '@opentelemetry/api';
+     * import { OpenTelemetry, OpenTelemetryConfig, OpenTelemetryTracesConfig, OpenTelemetryMetricsConfig, GlideClient } from "@valkey/valkey-glide";
+     * import { trace } from '@opentelemetry/api';
      *
-     * let openTelemetryConfig: OpenTelemetryConfig = {
-     *  traces: {
-     *    endpoint: "http://localhost:4318/v1/traces",
-     *    samplePercentage: 10, // Optional, defaults to 1. Can also be changed at runtime via setSamplePercentage().
-     *  },
-     *  metrics: {
-     *    endpoint: "http://localhost:4318/v1/metrics",
-     *  },
-     *  flushIntervalMs: 1000, // Optional, defaults to 5000
-     *  spanFromContext: () => {
-     *    const span = trace.getActiveSpan(context.active());
-     *    if (span && span.spanContext().traceId) {
-     *      // Extract span information and create a GLIDE span
-     *      // This requires creating a parent span first
-     *      const spanPtr = createNamedOtelSpan(span.attributes?.['operation.name'] || 'request');
-     *      return Number(BigInt(spanPtr[0]) | (BigInt(spanPtr[1]) << 32n));
-     *    }
-     *    return null;
-     *  },
+     * const spanFromContext = (): bigint | null => {
      * };
-     * OpenTelemetry.init(openTelemetryConfig);
+     *
+     * // 3. Initialize Glide's OpenTelemetry system
+     * let config: OpenTelemetryConfig = {
+     *   traces: {
+     *     endpoint: "http://localhost:4318/v1/traces",
+     *     samplePercentage: 100, // Sample all for demo
+     *   },
+     *   metrics: {
+     *     endpoint: "http://localhost:4318/v1/metrics",
+     *   },
+     *   flushIntervalMs: 1000,
+     *   spanFromContext: spanFromContext,
+     * };
+     * OpenTelemetry.init(config);
+     *
      * ```
      *
      * @remarks
@@ -94,7 +90,7 @@ export class OpenTelemetry {
                 "info",
                 "GlideOpenTelemetry",
                 "OpenTelemetry initialized with config: " +
-                JSON.stringify(openTelemetryConfig),
+                    JSON.stringify(openTelemetryConfig),
             );
             return;
         }
@@ -141,7 +137,6 @@ export class OpenTelemetry {
             Math.random() * 100 < percentage
         );
     }
-
 
     /**
      * Set the percentage of requests to be sampled and traced. Must be a value between 0 and 100.
